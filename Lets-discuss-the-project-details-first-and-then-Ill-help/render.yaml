@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: apollo-lead-scraper
+    env: python
+    buildCommand: "pip install -r pyproject.toml"
+    startCommand: "gunicorn --bind 0.0.0.0:$PORT main:app"
+    plan: free
+    envVars:
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///apollo_scraper.db
+      - key: PYTHON_VERSION
+        value: "3.11.0"

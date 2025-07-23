@@ -1,0 +1,531 @@
+{% extends "base.html" %}
+
+{% block title %}Apollo Lead Scraper - Home{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Main Scraping Form -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
+                    <i class="bi bi-search me-2"></i>Start New Scraping Job
+                </h4>
+            </div>
+            <div class="card-body">
+                <form id="scraping-form">
+                    <!-- Apollo Search URL -->
+                    <div class="mb-3">
+                        <label for="search_url" class="form-label">
+                            <i class="bi bi-link-45deg me-1"></i>Apollo Search URL *
+                        </label>
+                        <input type="url" class="form-control" id="search_url" name="search_url" required
+                               placeholder="https://app.apollo.io/#/people?qKeywords=software%20engineer">
+                        <div class="form-text">
+                            Copy the search URL from Apollo.io after setting up your filters
+                        </div>
+                    </div>
+
+                    <!-- Authentication -->
+                    <div class="mb-3">
+                        <label for="cookies" class="form-label">
+                            <i class="bi bi-shield-check me-1"></i>Apollo Cookies (Optional but Recommended)
+                        </label>
+                        <textarea class="form-control" id="cookies" name="cookies" rows="3"
+                                  placeholder='[{"name":"cookie_name","value":"cookie_value"}] or name1=value1; name2=value2'></textarea>
+                        <div class="form-text">
+                            For better reliability, export cookies from your logged-in Apollo session. 
+                            <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#cookieHelpModal">
+                                How to get cookies?
+                            </button>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-secondary mt-2" id="test-auth-btn">
+                            <i class="bi bi-check-circle me-1"></i>Test Authentication
+                        </button>
+                    </div>
+
+                    <!-- Scraping Settings -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="max_results" class="form-label">
+                                <i class="bi bi-list-ol me-1"></i>Max Results
+                            </label>
+                            <input type="number" class="form-control" id="max_results" name="max_results" 
+                                   value="1000" min="1" max="{{ config.MAX_DAILY_LEADS }}" required>
+                            <div class="form-text">Maximum number of leads to scrape (1-{{ config.MAX_DAILY_LEADS }})</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="delay" class="form-label">
+                                <i class="bi bi-clock me-1"></i>Delay Between Requests (seconds)
+                            </label>
+                            <input type="number" class="form-control" id="delay" name="delay" 
+                                   value="{{ config.DEFAULT_DELAY }}" min="{{ config.MIN_DELAY }}" max="{{ config.MAX_DELAY }}" required>
+                            <div class="form-text">{{ config.MIN_DELAY }}-{{ config.MAX_DELAY }}s (higher = more reliable)</div>
+                        </div>
+                    </div>
+
+                    <!-- Estimated Time -->
+                    <div class="mb-3">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Estimated Time:</strong> <span id="estimated-time">~17 minutes</span>
+                            <br>
+                            <small>Based on 1000 results with 10 second delays. Higher delays improve data quality and reduce blocking risk.</small>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg" id="start-scraping-btn">
+                            <i class="bi bi-play-circle me-2"></i>Start Scraping
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Daily Usage Stats -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-bar-chart me-2"></i>Today's Usage
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-12 mb-3">
+                        <div class="h4 text-primary mb-1">{{ daily_usage.leads_scraped if daily_usage else 0 }}</div>
+                        <small class="text-muted">Leads Scraped</small>
+                        <div class="progress mt-2" style="height: 8px;">
+                            <div class="progress-bar" style="width: {{ ((daily_usage.leads_scraped or 0) / config.MAX_DAILY_LEADS * 100) if config else 0 }}%"></div>
+                        </div>
+                        <small class="text-muted">{{ config.MAX_DAILY_LEADS - (daily_usage.leads_scraped or 0) if config else config.MAX_DAILY_LEADS }} remaining</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="h6 text-success mb-1">{{ daily_usage.requests_made if daily_usage else 0 }}</div>
+                        <small class="text-muted">Requests</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="h6 text-info mb-1">{{ daily_usage.jobs_completed if daily_usage else 0 }}</div>
+                        <small class="text-muted">Jobs Done</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Jobs -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-clock-history me-2"></i>Recent Jobs
+                </h5>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_jobs %}
+                    <div class="list-group list-group-flush">
+                        {% for job in recent_jobs[:5] %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="me-auto">
+                                    <div class="fw-bold small">Job #{{ job.id }}</div>
+                                    <small class="text-muted">{{ job.created_at.strftime('%m/%d %H:%M') if job.created_at else 'N/A' }}</small>
+                                </div>
+                                <span class="badge bg-{{ 'success' if job.status == 'completed' else 'danger' if job.status == 'failed' else 'warning' if job.status == 'running' else 'secondary' }}">
+                                    {{ job.status.title() }}
+                                </span>
+                            </div>
+                            {% if job.status == 'completed' %}
+                                <small class="text-success">{{ job.scraped_leads or 0 }} leads scraped</small>
+                            {% elif job.status == 'running' %}
+                                <div class="progress mt-1" style="height: 4px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         style="width: {{ job.progress or 0 }}%"></div>
+                                </div>
+                                <small class="text-muted">{{ job.progress|round(1) if job.progress else 0 }}% complete</small>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-inbox display-6"></i>
+                        <p class="mt-2 mb-0">No jobs yet</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Job Progress Modal -->
+<div class="modal fade" id="progressModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-arrow-clockwise me-2"></i>Scraping in Progress
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Progress</span>
+                        <span id="progress-percentage">0%</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             id="progress-bar" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="h5 mb-1" id="scraped-count">0</div>
+                        <small class="text-muted">Scraped</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="h5 mb-1" id="total-count">0</div>
+                        <small class="text-muted">Total</small>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <strong>Status:</strong> <span id="job-status">Starting...</span>
+                </div>
+                
+                <div class="mt-2">
+                    <small class="text-muted">Job ID: <span id="job-id"></span></small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Run in Background</button>
+                <button type="button" class="btn btn-outline-danger" id="cancel-job-btn">Cancel Job</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cookie Help Modal -->
+<div class="modal fade" id="cookieHelpModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-question-circle me-2"></i>How to Extract Apollo Cookies
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-chrome me-1"></i>Method 1: Browser Extension</h6>
+                        <ol class="small">
+                            <li>Install "EditThisCookie" Chrome extension</li>
+                            <li>Login to Apollo.io</li>
+                            <li>Click the extension icon</li>
+                            <li>Click "Export" (5th icon)</li>
+                            <li>Copy the JSON data</li>
+                            <li>Paste into the cookies field</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-tools me-1"></i>Method 2: Developer Tools</h6>
+                        <ol class="small">
+                            <li>Login to Apollo.io</li>
+                            <li>Press F12 (Developer Tools)</li>
+                            <li>Go to Application → Cookies → apollo.io</li>
+                            <li>Copy cookie names and values</li>
+                            <li>Format as: name1=value1; name2=value2</li>
+                            <li>Paste into the cookies field</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning mt-3">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Important:</strong> Cookies provide better authentication and reduce the chance of getting blocked. 
+                    Without cookies, you may need to solve CAPTCHAs or face rate limits.
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Privacy:</strong> Cookies are processed locally and not stored permanently. They're only used for the current scraping session.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Global variables
+let currentJobId = null;
+let progressInterval = null;
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    updateEstimatedTime();
+    
+    // Update estimated time when settings change
+    document.getElementById('max_results').addEventListener('input', updateEstimatedTime);
+    document.getElementById('delay').addEventListener('input', updateEstimatedTime);
+});
+
+function updateEstimatedTime() {
+    const maxResults = parseInt(document.getElementById('max_results').value) || 1000;
+    const delay = parseInt(document.getElementById('delay').value) || 10;
+    
+    const totalSeconds = Math.ceil(maxResults / 25) * delay; // Estimate 25 results per page
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    
+    let timeStr = '';
+    if (hours > 0) {
+        timeStr = `~${hours}h ${minutes}m`;
+    } else {
+        timeStr = `~${minutes}m`;
+    }
+    
+    document.getElementById('estimated-time').textContent = timeStr;
+}
+
+// Handle form submission
+document.getElementById('scraping-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    startScraping();
+});
+
+// Test authentication
+document.getElementById('test-auth-btn').addEventListener('click', function() {
+    const cookies = document.getElementById('cookies').value.trim();
+    
+    if (!cookies) {
+        showAlert('Please enter cookies to test authentication', 'warning');
+        return;
+    }
+    
+    const btn = this;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise spin me-1"></i>Testing...';
+    btn.disabled = true;
+    
+    fetch('/test_auth', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'cookies=' + encodeURIComponent(cookies)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Authentication successful! ✓', 'success');
+        } else {
+            showAlert('Authentication failed: ' + data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert('Authentication test failed: ' + error.message, 'danger');
+    })
+    .finally(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+});
+
+function startScraping() {
+    const form = document.getElementById('scraping-form');
+    const formData = new FormData(form);
+    const btn = document.getElementById('start-scraping-btn');
+    
+    // Validate form
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+    
+    // Disable submit button
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise spin me-2"></i>Starting...';
+    btn.disabled = true;
+    
+    fetch('/start_scraping', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            currentJobId = data.job_id;
+            showProgressModal(data);
+            startProgressMonitoring();
+        } else {
+            showAlert('Error: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert('Failed to start scraping: ' + error.message, 'danger');
+    })
+    .finally(() => {
+        btn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Start Scraping';
+        btn.disabled = false;
+    });
+}
+
+function showProgressModal(data) {
+    document.getElementById('job-id').textContent = data.job_id;
+    document.getElementById('job-status').textContent = 'Starting...';
+    document.getElementById('progress-percentage').textContent = '0%';
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('scraped-count').textContent = '0';
+    document.getElementById('total-count').textContent = '0';
+    
+    const modal = new bootstrap.Modal(document.getElementById('progressModal'));
+    modal.show();
+}
+
+function startProgressMonitoring() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+    }
+    
+    progressInterval = setInterval(() => {
+        if (currentJobId) {
+            updateJobProgress(currentJobId);
+        }
+    }, 2000); // Update every 2 seconds
+}
+
+function updateJobProgress(jobId) {
+    fetch(`/job_status/${jobId}`)
+    .then(response => response.json())
+    .then(data => {
+        updateProgressDisplay(data);
+        
+        if (data.status === 'completed' || data.status === 'failed') {
+            clearInterval(progressInterval);
+            progressInterval = null;
+            
+            if (data.status === 'completed') {
+                handleJobCompletion(data);
+            } else {
+                handleJobFailure(data);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error updating progress:', error);
+    });
+}
+
+function updateProgressDisplay(data) {
+    const progress = data.progress || 0;
+    const scrapedLeads = data.scraped_leads || 0;
+    const totalLeads = data.total_leads || 0;
+    
+    document.getElementById('progress-percentage').textContent = `${progress.toFixed(1)}%`;
+    document.getElementById('progress-bar').style.width = `${progress}%`;
+    document.getElementById('scraped-count').textContent = scrapedLeads;
+    document.getElementById('total-count').textContent = totalLeads;
+    document.getElementById('job-status').textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+}
+
+function handleJobCompletion(data) {
+    showAlert(`Scraping completed! ${data.scraped_leads} leads extracted.`, 'success');
+    
+    // Add download button to modal
+    const modalFooter = document.querySelector('#progressModal .modal-footer');
+    if (!document.getElementById('download-csv-btn')) {
+        const downloadBtn = document.createElement('button');
+        downloadBtn.id = 'download-csv-btn';
+        downloadBtn.className = 'btn btn-success';
+        downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Download CSV';
+        downloadBtn.onclick = () => downloadCSV(currentJobId);
+        modalFooter.insertBefore(downloadBtn, modalFooter.firstChild);
+    }
+    
+    // Update daily usage
+    updateDailyUsage();
+}
+
+function handleJobFailure(data) {
+    showAlert(`Scraping failed: ${data.error_message || 'Unknown error'}`, 'danger');
+}
+
+// Cancel job
+document.getElementById('cancel-job-btn').addEventListener('click', function() {
+    if (currentJobId && confirm('Are you sure you want to cancel this job?')) {
+        fetch(`/cancel_job/${currentJobId}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('Job cancelled successfully', 'info');
+                clearInterval(progressInterval);
+                progressInterval = null;
+            } else {
+                showAlert('Error cancelling job: ' + data.error, 'danger');
+            }
+        })
+        .catch(error => {
+            showAlert('Failed to cancel job: ' + error.message, 'danger');
+        });
+    }
+});
+
+function downloadCSV(jobId) {
+    window.open(`/download_csv/${jobId}`, '_blank');
+}
+
+function updateDailyUsage() {
+    fetch('/daily_stats')
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('daily-leads-count').textContent = data.leads_scraped;
+        // Update other stats if needed
+    })
+    .catch(error => {
+        console.error('Error updating daily usage:', error);
+    });
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('main .container');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Add CSS for spinning animation
+const style = document.createElement('style');
+style.textContent = `
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}

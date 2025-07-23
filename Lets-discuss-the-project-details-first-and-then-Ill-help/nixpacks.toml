@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["python311", "chromium", "xvfb-run"]
+
+[phases.install]
+cmds = ["pip install -r pyproject.toml"]
+
+[phases.build]
+cmds = ["echo 'Build phase complete'"]
+
+[start]
+cmd = "gunicorn --bind 0.0.0.0:$PORT --workers 1 main:app"

@@ -1,0 +1,44 @@
+APOLLO LEAD SCRAPER - COMPLETE FILES FOR GITHUB UPLOAD
+======================================================
+
+COPY ALL THESE FILES TO YOUR GITHUB REPOSITORY:
+
+ROOT DIRECTORY FILES:
+├── main.py
+├── app.py
+├── models.py
+├── routes.py
+├── scraper.py
+├── tasks.py
+├── utils.py
+├── config.py
+├── chrome_setup.py
+├── simple_scraper.py
+├── test_demo.py
+├── pyproject.toml
+├── render.yaml
+├── railway.json
+├── nixpacks.toml
+├── Procfile
+├── app.json
+├── runtime.txt
+├── README.md
+├── DEPLOYMENT_GUIDE.md
+├── .gitignore
+
+FOLDERS TO UPLOAD:
+├── templates/
+│   ├── base.html
+│   ├── index.html
+│   ├── dashboard.html
+│   ├── 404.html
+│   └── 500.html
+├── static/
+│   ├── css/
+│   └── js/
+└── instance/
+    └── apollo_scraper.db
+
+TOTAL FILES: All Python files + Templates + Static assets + Database
+
+DEPLOYMENT READY: Once uploaded, works with Render, Railway, Heroku

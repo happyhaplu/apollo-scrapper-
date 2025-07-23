@@ -1,0 +1,39 @@
+{
+  "name": "Apollo Lead Scraper",
+  "description": "High-quality Apollo.io lead scraper with smart rate limiting and CSV export",
+  "repository": "https://github.com/your-repo/apollo-scraper",
+  "logo": "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/icons/search.svg",
+  "keywords": ["apollo", "scraper", "leads", "flask", "python"],
+  "stack": "heroku-20",
+  "env": {
+    "SESSION_SECRET": {
+      "description": "Secret key for Flask sessions",
+      "generator": "secret"
+    },
+    "DATABASE_URL": {
+      "description": "Database URL (will use SQLite if not provided)",
+      "required": false
+    },
+    "REDIS_URL": {
+      "description": "Redis URL for background processing (optional)",
+      "required": false
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "free"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "https://github.com/heroku/heroku-buildpack-chromedriver"
+    },
+    {
+      "url": "https://github.com/heroku/heroku-buildpack-google-chrome"
+    },
+    {
+      "url": "heroku/python"
+    }
+  ]
+}
